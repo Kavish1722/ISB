@@ -1,6 +1,6 @@
 ---
 title: "Assignment_MA"
-author: "Sanjeev Sharma"
+author: "Kavish Gakhar"
 date: "11 November 2018"
 output: html_document
 ---

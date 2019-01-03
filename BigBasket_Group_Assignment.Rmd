@@ -1,0 +1,164 @@
+---
+title: "Bigbasket_Group_Assignment"
+author: "Kavish Gakhar"
+date: "19 September 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+if(!require(recommenderlab)){install.packages("recommenderlab")}
+if(!require(reshape2)){install.packages("reshape2")}
+if(!require(Matrix)){install.packages("Matrix")}
+if(!require(arules)){install.packages("arules")}
+if(!require(arulesViz)){install.packages("arulesViz")}
+if(!require(arulesSequences)){install.packages("arulesSequences")}
+
+library("recommenderlab")
+library("reshape2")
+library("Matrix")
+library("arules")
+library("arulesViz")
+library("dplyr")
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+## Q5 - Using the Association Rules technique, do the following: Pick a customer of your choice and suggest one "Did you forget?" item for that customer. Present and explain the output generated from Association Rules techniques in support of your answer. Please explain the steps before presenting the answer. 
+
+```{r}
+#Association rules for a user
+
+Input <-read.csv("IMB575-XLS-ENG.csv",header=TRUE)
+colnames(Input)[1]<-"Member"
+head(Input)
+Input_subset <- Input[which(Input$Member=='M31966'),]
+head(Input_subset)
+Input_new <- Input_subset[,c(2,5)]
+head(Input_new)
+write.table(Input_new, "basket.txt", sep=", ", row.names = FALSE, col.names = FALSE, quote = FALSE)
+trs <- read.transactions("basket.txt", format = "single", sep=",", cols = c(1,2))
+inspect(trs[1:5])
+
+Arules = apriori(trs, parameter=list(support=0.001, confidence=0.7,minlen=2)) 
+#trans <- as(Input_matrix,"transactions")
+head(Arules)
+inspect(head(sort(Arules, by="lift"), 10))
+
+```
+
+##Q6 - Now, unlike in the question above, generate two consumer-agnostic association rules? How are they different from the rules obtained in Question 5 above? Present and explain the output generated from Association Rules techniques in support of your answer. Offer some actionable recommendations for these rules. Please explain the steps before presenting the answer. 
+
+```{r}
+#Association Rules - Customer agnostic
+
+Input <-read.csv("IMB575-XLS-ENG.csv",header=TRUE)
+colnames(Input)[1]<-"Member"
+head(Input)
+Input_new <- Input[,c(2,5)]
+head(Input_new)
+
+write.table(Input_new, "basket.txt", sep=", ", row.names = FALSE, col.names = FALSE, quote = FALSE)
+#Input_matrix <- as.matrix(acast(Input_new, Order~Description,value.var = "Description"))
+trs <- read.transactions("basket.txt", format = "single", sep=",", cols = c(1,2))
+inspect(trs[1:5])
+
+Arules = apriori(trs, parameter=list(support=0.001, confidence=0.7,minlen=2)) 
+#trans <- as(Input_matrix,"transactions")
+head(Arules)
+inspect(head(sort(Arules, by="lift"), 10))
+```
+
+
+## Q7 - Bigbasket is interested in introducing a "Smart Basket" feature that will identify a list of items a customer is more likely to buy. Discuss how this feature can be created? 
+```{r}
+#Recommendation Engine
+
+Input <-read.csv("IMB575-XLS-ENG.csv",header=TRUE)
+colnames(Input)[1]<-"Member"
+head(Input)
+Input_new <- Input[,c(1,5)]
+Input_new <- cbind(Input_new,"Count"=1)
+head(Input_new)
+
+ratings_matrix <- as.matrix(acast(Input_new, Member~Description, fun.aggregate = mean))
+#head(ratings_matrix,10)
+dim(ratings_matrix)
+Rate <- as(ratings_matrix, "realRatingMatrix")
+
+#Recommendation for existing user
+
+#User based
+## Q8 - Pick a customer of your choice and create a "smart basket" for that customer. Please explain the steps before presenting the answer. 
+
+rec1 = Recommender(Rate, method="UBCF")
+uid = "M31966"
+print("Member have brought:")
+products1 <- subset(Input_new, Input_new$Member==uid)
+products1
+products1 %>% group_by(Description) %>% summarise(Count = sum(Count))
+prediction1 <- predict(rec1, Rate[uid], n=20) 
+as(prediction1, "list")
+pred_TopN1 <- bestN(prediction1,n=10)
+as(pred_TopN1,"list")
+
+#Popular based
+
+rec2 = Recommender(Rate, method="POPULAR")
+uid = "M31966"
+print("Member have brought:")
+products2 <- subset(Input_new, Input_new$Member==uid)
+products2
+products2 %>% group_by(Description) %>% summarise(Count = sum(Count))
+prediction2 <- predict(rec2, Rate[uid], n=20) 
+as(prediction2, "list")
+pred_TopN2 <- bestN(prediction2,n=10)
+as(pred_TopN2,"list")
+
+# Item based
+
+rec3 = Recommender(Rate, method="IBCF")
+uid = "M31966"
+print("Member have brought:")
+products3 <- subset(Input_new, Input_new$Member==uid)
+products3
+products3 %>% group_by(Description) %>% summarise(Count = sum(Count))
+prediction3 <- predict(rec3, Rate[uid], n=20) 
+as(prediction3, "list")
+pred_TopN3 <- bestN(prediction2,n=10)
+as(pred_TopN3,"list")
+
+
+
+```
+## Validating the model/s
+
+```{r}
+eval_data <- evaluationScheme(Rate, method="split", train=0.9, given=15)
+
+rec_UBCF <- Recommender(getData(eval_data,"train"),"UBCF")
+rec_POP <- Recommender(getData(eval_data,"train"),"POPULAR")
+rec_IBCF <- Recommender(getData(eval_data,"train"),"IBCF")
+
+pred_UBCF <- predict(rec_UBCF,getData(eval_data,"known"),type="ratings")
+pred_POP <- predict(rec_POP,getData(eval_data,"known"),type="ratings")
+pred_IBCF <- predict(rec_IBCF,getData(eval_data,"known"),type="ratings")
+
+
+error_UBCF <-calcPredictionAccuracy(pred_UBCF,getData(eval_data,"unknown"))
+error_POP <-calcPredictionAccuracy(pred_POP,getData(eval_data,"unknown"))
+error_IBCF <-calcPredictionAccuracy(pred_IBCF,getData(eval_data,"unknown"))
+
+errors <- rbind(error_UBCF,error_POP, error_IBCF)
+rownames(errors) <- c("UBCF","POP", "IBCF")
+errors
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

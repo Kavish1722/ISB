@@ -1,0 +1,217 @@
+---
+title: "Assignment_MA"
+author: "Sanjeev Sharma"
+date: "11 November 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+
+try(require(fpc))||install.packages("fpc")
+try(require(psych))||install.packages("psych")
+try(require(MASS))||install.packages("MASS")
+try(require(conjoint))||install.packages("conjoint")
+try(require(devtools))||install.packages("devtools")
+try(require(klaR))||install.packages("klaR")
+
+library(fpc)
+library(psych)
+library(MASS)
+library(conjoint)
+library(devtools)
+library(klaR)
+#getwd()
+input1 <- read.csv("Partworth.csv",header=TRUE)
+head(input1)
+input <- input1[,2:22]
+head(input)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+# Determine number of clusters
+set.seed(seed = 0000)   # set seed for reproducible work
+wss <- (nrow(input)-1)*sum(apply(input,2,var))  # wss is within group sum of squares
+wss
+for (i in 2:15) 
+
+  wss[i] <- sum(      # checking model fit for 2 to 15 clusters
+
+                           kmeans(input,  centers = i)$withinss)  # note use of kmeans() func
+
+wss
+plot(1:15, wss, type="b", 
+     xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+
+```
+
+## Q1 - Segment respondents based on the Partworth data (use any unsupervised learning technique.
+
+
+
+```{r}
+norm_data <-scale(input)
+#norm_data
+
+km_clusters <- kmeans(norm_data, centers=3, iter.max=10, nstart=4)
+
+#km_clusters$cluster
+#km_clusters$centers
+#km_clusters$size
+#km_clusters$iter
+
+plotcluster(norm_data,km_clusters$cluster)
+clusplot(norm_data,km_clusters$cluster,color = TRUE,shade = TRUE,labels = 2,lines = 0)
+final_data=cbind(input,km_clusters$cluster)
+#write.csv(final_data,file = "Partworth_clusterID.csv")
+final_data_frame <- as.data.frame.data.frame(data.frame(input,km_clusters$cluster))
+Respondent <- input1[,1]
+final_data_frame <- data.frame(Respondent,final_data_frame)
+head(final_data_frame)
+str(final_data_frame)
+```
+
+## Q2 - Use the Descriptors in the Demographic data sheet to perform Discriminant Analysis type analysis (use any supervised learning technique) based on segments obtained in Step 1 and personify /describe each segment.
+
+```{r}
+
+input2 <- read.csv("Demographics.csv",header=TRUE)
+#head (input2)
+cluster <- as.factor(final_data_frame[,23])
+str(cluster)
+data_seg <- data.frame(cluster,input2[,2:6])
+head(data_seg)
+str(data_seg)
+
+pairs.panels(data_seg[,2:6],gap = 0, bg=c("red","green","blue")[data_seg$cluster],pch=21)
+
+# Parition the data
+set.seed(666)
+
+partition <- sample(2, nrow(data_seg),replace = TRUE, prob = c(0.65,0.35))
+
+train <- data_seg[partition==1,]
+test <- data_seg[partition==2,]
+str(train)
+
+linear_d_analysis <- lda(cluster~., train)
+linear_d_analysis
+linear_d_analysis$counts
+
+linear_d_predict <- predict(linear_d_analysis, train)
+#linear_d_predict
+ldahist(data = linear_d_predict$x[,1], g=train$cluster)
+ldahist(data = linear_d_predict$x[,2], g=train$cluster)
+
+partimat(cluster~.,data= train, method = "lda")
+partimat(cluster~.,data= train, method = "qda")
+
+# Confusion Matrix and Accuracy for training data
+
+confu_table <- table(Predicted = linear_d_predict$class, Actual = train$cluster)
+as.table(confu_table)
+sum(diag(confu_table))/sum(confu_table) # Accuracy of training data
+
+# Confusion Matrix and Accuracy for test data
+
+linear_d_predict_test <- predict(linear_d_analysis, test)$class
+confu_table_test <- table(Predicted = linear_d_predict_test, Actual = test$cluster)
+as.table(confu_table_test)
+sum(diag(confu_table_test))/sum(confu_table_test) # Acuuracy of test data
+
+
+# Personify / Describe each segment
+
+segment1 <- subset(data_seg,data_seg$cluster==1)
+segment2 <- subset(data_seg,data_seg$cluster==2)
+segment3 <- subset(data_seg,data_seg$cluster==3)
+
+#function to get MODE
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+# Finding center using MEAN
+
+center_seg1 <- c(mean(segment1$Weekly.consumption),getmode(segment1$Age..1.7.),getmode(segment1$Income..1.7.),getmode(segment1$Education..1.6.),getmode(segment1$Sex..M.1.))
+
+center_seg2 <- c(mean(segment2$Weekly.consumption),getmode(segment2$Age..1.7.),getmode(segment2$Income..1.7.),getmode(segment2$Education..1.6.),getmode(segment2$Sex..M.1.))
+
+center_seg3 <- c(mean(segment3$Weekly.consumption),getmode(segment3$Age..1.7.),getmode(segment3$Income..1.7.),getmode(segment3$Education..1.6.),getmode(segment3$Sex..M.1.))
+
+center_seg1
+center_seg2
+center_seg3
+
+center_seg <- as.data.frame(rbind(center_seg1,center_seg2,center_seg3))
+colnames(center_seg) <- c("weekly_consumption","Age","Income","Education","Sex")
+center_seg
+
+
+# Finding range using MIN and MAX 
+
+center_seg1_mm <- c(max(segment1$Weekly.consumption)-min(segment1$Weekly.consumption),
+                 max(segment1$Age..1.7.)-min(segment1$Age..1.7.),
+                 max(segment1$Income..1.7.)-min(segment1$Age..1.7.),
+                 max(segment1$Education..1.6.)-min(segment1$Education..1.6.),
+                                                   getmode(segment1$Sex..M.1.))
+
+
+center_seg2_mm <- c(max(segment2$Weekly.consumption)-min(segment2$Weekly.consumption),
+                 max(segment2$Age..1.7.)-min(segment2$Age..1.7.),
+                 max(segment2$Income..1.7.)-min(segment2$Age..1.7.),
+                 max(segment2$Education..1.6.)-min(segment2$Education..1.6.),
+                                                   getmode(segment2$Sex..M.1.))
+
+center_seg3_mm <- c(max(segment3$Weekly.consumption)-min(segment3$Weekly.consumption),
+                 max(segment3$Age..1.7.)-min(segment3$Age..1.7.),
+                 max(segment3$Income..1.7.)-min(segment3$Age..1.7.),
+                 max(segment3$Education..1.6.)-min(segment3$Education..1.6.),
+                                                   getmode(segment3$Sex..M.1.))
+
+center_seg_mm <- as.data.frame(rbind(center_seg1_mm,center_seg2_mm,center_seg3_mm))
+colnames(center_seg_mm) <- c("weekly_consumption","Age","Income","Education","Sex")
+center_seg_mm
+
+```
+## Another way of dealing with question 2 for Personify / Describe each segment is to get percentage of each attribute for each respondednt after geting MAX-MIN of each attribute level
+```{r}
+# Uploading the excel after doing calulcation in excel. Please look at the attached "Answer_Q2.csv" and "Partworth_calculations.xls" files
+
+file1 <- read.csv("Answer_Q2.csv",header = TRUE)
+head(file1)
+file2 <- file1[,2:14]
+head(file2)
+
+seg1 <- subset(file2,file2$Cluster==1)
+head(seg1)
+seg2 <- subset(file2,file2$Cluster==2)
+seg3 <- subset(file2,file2$Cluster==3)
+
+center_seg1 <- c(mean(seg1$P_IM_Origin),mean(seg1$P_IM_Price),mean(seg1$P_IM_Body),mean(seg1$P_IM_Aftertaste),
+                 mean(seg1$P_IM_Calories),mean(seg1$P_IM_Packaging),mean(seg1$P_IM_Glass),mean(segment1$Weekly.consumption),
+                 getmode(seg1$Age),getmode(seg1$Income),getmode(seg1$Education),getmode(seg1$Sex))
+
+center_seg2 <- c(mean(seg2$P_IM_Origin),mean(seg2$P_IM_Price),mean(seg2$P_IM_Body),mean(seg2$P_IM_Aftertaste),
+                 mean(seg2$P_IM_Calories),mean(seg2$P_IM_Packaging),mean(seg2$P_IM_Glass),mean(segment2$Weekly.consumption),
+                 getmode(seg2$Age),getmode(seg2$Income),getmode(seg2$Education),getmode(seg2$Sex))
+
+center_seg3 <- c(mean(seg3$P_IM_Origin),mean(seg3$P_IM_Price),mean(seg3$P_IM_Body),mean(seg3$P_IM_Aftertaste),
+                 mean(seg3$P_IM_Calories),mean(seg3$P_IM_Packaging),mean(seg3$P_IM_Glass),mean(segment3$Weekly.consumption),
+                 getmode(seg3$Age),getmode(seg3$Income),getmode(seg3$Education),getmode(seg3$Sex))
+
+center_seg_mm2 <- as.data.frame(rbind(center_seg1,center_seg2,center_seg3))
+colnames(center_seg_mm2) <- c("P_IM_Origin","P_IM_Price","P_IM_Body","P_IM_Aftertaste","P_IM_Calories","P_IM_Packaging",
+"P_IM_Glass","weekly_consumption","Age","Income","Education","Sex")
+center_seg_mm2
+```
+

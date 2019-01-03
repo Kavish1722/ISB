@@ -1,0 +1,335 @@
+---
+title: "SA2_Assignment"
+author: "Sanjeev Sharma"
+date: "28 September 2018"
+output: html_document
+---
+## Sanjeev Sharma (ID-11910079), Kavish Gakhar (ID - 11910045), Rishabh Jethwani (ID - 11910097)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(knitr)
+library(dplyr)
+library(GGally)
+library(corrplot)
+library(psych)
+library(caret)
+library(e1071)
+library(ROCR)
+library(CORElearn)
+library(lasso2)
+library(car)
+library(graphics)
+library(olsrr) 
+library(MASS)
+library(leaps)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+
+Input <- read.csv("Dataset.csv", header = T)
+
+summary(Input)
+glimpse(Input)
+
+Input[is.na(Input)]<-0
+any(is.na(Input))
+
+setnames(Input,"Gender.F.Female.","Gender")
+setnames(Input,"AREA.Agrl.","AREA")
+
+
+finaldata <- mutate(Input,INCOME=sub("#NULL!",0,INCOME))
+finaldata <- mutate(finaldata,AREA=sub("#NULL!",0.00,AREA))
+#finaldata <- mutate(finaldata,AREA=sub('TRUE',1,Gender))
+#finaldata <- mutate(finaldata,AREA=sub('FALSE',0,Gender))
+finaldata$?..SLNO<-NULL
+
+finaldata <- subset(finaldata,finaldata$WRITE+finaldata$READ+finaldata$MATH==finaldata$TOTAL)
+
+finaldata <- sample_n(finaldata,1000)
+glimpse(finaldata)
+
+set.seed(123)
+inTrain <- createDataPartition(y = finaldata$TOTAL, p = .7,list = FALSE)
+train <- finaldata[ inTrain,]
+test <- finaldata[-inTrain,]
+nrow(train) 
+nrow(test)
+```
+
+## 1.Model with all variables
+1.Model with all variables
+
+Observations..
+
+Just Look at the Model with all the Variables and such high R^2 and  adjusted too.
+
+But look at the Significance levels by looking at P-Value of each Variable
+
+Residual Plot almost near Zero
+
+Questions ??
+
+Can we achieve good R^2 with lesser variables ?
+
+Is it overfitted???
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+#model_lm <- lm(TOTAL ~ Gender +	AGE	+ CASTE	+ RELIGN + MTONGUE + OCCU	+ INCOME	+AREA	+ WRITE	+ READ +	MATH, data = train)
+model_lm <- lm(TOTAL ~ ., data = train)
+summary(model_lm)
+residualPlot(model_lm, id=5)
+qqPlot(model_lm,id.n=5)
+
+#There are few values that are far away from zero. We need to check for Influential values
+k=11 # Number of predictor variables
+Hat_Values_M1 <- hatvalues(model_lm) # Get Hat values
+Hat_Values_ID <- which(Hat_Values_M1 > (3*(k+1)/nrow(finaldata))) ## ID the observations with hatvalue > #3*(k+1)/n
+Hat_Values_M1[Hat_Values_ID]
+
+#Look at the plots for influential values
+cutoff1 <- 1
+# # Cutoff  =  4/(n-k-1) 
+model_lm$coefficients
+cutoff2 <- 4/((nrow(finaldata)-length(model_lm$coefficients)-2)) 
+#cutoff2
+plot(cooks.distance(model_lm,id=5)) # Plot Cooks D for every obs
+ols_plot_cooksd_chart(model_lm)
+#abline(h = cutoff2, lty = 2) # Add cutoff line
+influencePlot(model_lm,identify = "Auto")
+influenceIndexPlot(model_lm)
+
+## DFBETAs DIFITs
+#influence.measures(model_lm) 
+influence.m <- as.data.frame(influence.measures(model_lm)[1])
+head(influence.m)
+
+ols_plot_dffits(model_lm)
+ols_plot_dfbetas(model_lm)
+
+
+```
+
+## Use AIC to select best model
+## It tell what information will be lost if a model were to be used
+## Can be used to compare models based on same data. compare value of AIC of two models and select the lower/lowest AIC value model
+
+Running AIC to find variables of Importance...
+1.Backward Selection
+
+
+
+```{r}
+stepAIC(model_lm) # Default: Backward selection
+ols_step_backward_p(model_lm)
+ols_step_backward_aic(model_lm)
+```
+
+##Running AIC to find variables of Importance...
+1.Stepwise Selection - Bothways
+
+
+```{r}
+stepAIC(model_lm, direction = "both")
+ols_step_both_p(model_lm)
+ols_step_both_aic(model_lm)
+```
+
+
+##Running BIC to find variables of Importance...
+Choose the model with lowest BIC
+1.Stepwise Selection - Bothways
+
+
+
+
+```{r}
+stepAIC(model_lm, direction = "both",k = log(nrow(finaldata)))
+
+```
+
+Using Subsets with lesser variables as the method takes a lot of time.
+
+An effective usual way of getting importance of variables.
+
+BIC,AdjR^2 and R^2
+Read, Math, Write, Area.Agrl, Intercept,
+```{r}
+reg.subset <- regsubsets(TOTAL ~  Gender + CASTE + RELIGN + MTONGUE + WRITE	+ READ +	MATH, data = finaldata)
+reg.summary<- summary(reg.subset)
+reg.summary
+
+plot(reg.summary$rsq,xlab="Number of Variables",ylab="Rsquare",type="l") # Rsquare
+plot(reg.summary$rss,xlab="Number of Variables",ylab="RSS",type="l") # RSS
+plot(reg.summary$adjr2,xlab="Number of Variables",ylab="Adjusted Rsquare",type="l") # RSS
+plot(reg.summary$cp,xlab="Number of Variables",ylab="CP",type="l") # CP
+plot(reg.summary$bic,xlab="Number of Variables",ylab="BIC",type="l") # BIC
+
+
+plot(reg.subset, scale = "r2") ## R squared 
+plot(reg.subset, scale = "adjr2") ## adj R2
+plot(reg.subset, scale = "Cp") ## adj R2
+plot(reg.subset) ## default is BIC
+
+coef(reg.subset,1:8)
+
+
+```
+
+
+## Another subset with lesser variables
+
+```{r}
+reg.subset1 <- regsubsets(TOTAL ~  Gender + MTONGUE + WRITE	+ READ +	MATH, data = finaldata)
+
+reg.summary1 <- summary(reg.subset1)
+reg.summary1
+
+plot(reg.summary1$rsq,xlab="Number of Variables",ylab="Rsquare",type="l") # Rsquare
+plot(reg.summary1$rss,xlab="Number of Variables",ylab="RSS",type="l") # RSS
+plot(reg.summary1$adjr2,xlab="Number of Variables",ylab="Adjusted Rsquare",type="l") # RSS
+plot(reg.summary1$cp,xlab="Number of Variables",ylab="CP",type="l") # CP
+plot(reg.summary1$bic,xlab="Number of Variables",ylab="BIC",type="l") # BIC
+
+
+plot(reg.subset1, scale = "r2") ## R squared 
+plot(reg.subset1, scale = "adjr2") ## adj R2
+plot(reg.subset1, scale = "Cp") ## adj R2
+plot(reg.subset1) ## default is BIC
+
+coef(reg.subset1,1:8)
+
+```
+
+## Final iteration for variable selection
+
+```{r}
+
+reg.subset2 <- regsubsets(TOTAL ~  WRITE	+ READ +	MATH, data = finaldata)
+reg.summary2 <- summary(reg.subset2)
+reg.summary2
+
+plot(reg.summary2$rsq,xlab="Number of Variables",ylab="Rsquare",type="l") # Rsquare
+plot(reg.summary2$rss,xlab="Number of Variables",ylab="RSS",type="l") # RSS
+plot(reg.summary2$adjr2,xlab="Number of Variables",ylab="Adjusted Rsquare",type="l") # RSS
+plot(reg.summary2$cp,xlab="Number of Variables",ylab="CP",type="l") # CP
+plot(reg.summary2$bic,xlab="Number of Variables",ylab="BIC",type="l") # BIC
+
+
+plot(reg.subset2, scale = "r2") ## R squared 
+plot(reg.subset2, scale = "adjr2") ## adj R2
+plot(reg.subset2, scale = "Cp") ## adj R2
+plot(reg.subset2) ## default is BIC
+
+coef(reg.subset2,1:3)
+```
+
+#Logistic Regression
+ 
+ 1.Convert Total Into Two Factors : Low and High
+
+```{r}
+finaldata$Perfomance<- factor( rep("other",nrow(finaldata)),ordered = F, levels = c("Low","High"))
+finaldata$Perfomance[finaldata$TOTAL <= 70] <- "Low"
+finaldata$Perfomance[finaldata$TOTAL > 70] <- "High"
+glimpse(finaldata)
+```
+
+##Model with all variables with GLM.
+Look at Significance Levels, Deviance, Confusion Matrix and ROC Curve :-
+
+```{r}
+model_glm <- glm(Perfomance ~ Gender + AGE	+ CASTE	+ RELIGN + MTONGUE + OCCU	+ INCOME + AREA	+ WRITE	+ READ +	MATH, data = finaldata, family=binomial)
+summary(model_glm)
+
+#Stepwise Model
+
+stepAIC(model_glm, direction = "both")
+
+#Look like high accuracy by looking at table.
+#Both Low-Low and High-High
+predicted <- predict(model_glm, newdata = finaldata, type = "response")
+predicted <- as.numeric(predicted>0.5)
+table(predicted,finaldata$Perfomance)
+
+#Reconfirming it with ROC Curve
+library(pROC)
+predicted <- predict(model_glm, newdata = finaldata, type = "response")
+roccurve <- roc(finaldata$Perfomance ~ predicted)
+plot(roccurve)
+auc(roccurve)
+```
+
+
+
+## Model it without Read, Write and Math. Let's See what it says.
+
+```{r}
+model_glm1 <- glm(Perfomance ~Gender +	AGE	+ CASTE	+ RELIGN + MTONGUE + OCCU	+ INCOME	+AREA, data = finaldata, family=binomial)
+summary(model_glm1)
+predicted <- predict(model_glm1, newdata = finaldata, type = "response")
+predicted <- as.numeric(predicted>0.5)
+table(predicted,finaldata$Perfomance)
+
+stepAIC(model_glm1, direction = "both")
+roccurve1 <- roc(finaldata$Perfomance ~ predicted)
+plot(roccurve1)
+auc(roccurve1)
+
+```
+
+```{r}
+#install.packages("ResourceSelection")
+library(ResourceSelection)
+
+hoslem.test(finaldata$Perfomance,fitted(model_glm))
+
+
+```
+
+```{r}
+logisticPseudoR2s <- function(LogModel) {
+  dev <- LogModel$deviance 
+  nullDev <- LogModel$null.deviance 
+  modelN <-  length(LogModel$fitted.values)
+  R.l <-  1 -  dev / nullDev
+  R.cs <- 1- exp ( -(nullDev - dev) / modelN)
+  R.n <- R.cs / ( 1 - ( exp (-(nullDev / modelN))))
+  cat("Pseudo R^2 for logistic regression\n")
+  cat("Hosmer and Lemeshow R^2  ", round(R.l, 3), "\n")
+  cat("Cox and Snell R^2        ", round(R.cs, 3), "\n")
+  cat("Nagelkerke R^2           ", round(R.n, 3),    "\n")
+}
+
+logisticPseudoR2s(model_glm)
+logisticPseudoR2s(model_glm1)
+```
+
+```{r}
+model_glm2 <- glm(Perfomance ~ WRITE	+ READ +	MATH, data = finaldata, family=binomial)
+summary(model_glm2)
+predicted <- predict(model_glm2, newdata = finaldata, type = "response")
+predicted <- as.numeric(predicted>0.5)
+table(predicted,finaldata$Perfomance)
+
+stepAIC(model_glm2, direction = "both")
+roccurve2 <- roc(finaldata$Perfomance ~ predicted)
+plot(roccurve2)
+auc(roccurve2)
+logisticPseudoR2s(model_glm2)
+```
+

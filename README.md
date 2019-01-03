@@ -15,3 +15,5 @@ Source: https://archive.ics.uci.edu/ml/datasets/Diabetes+130-US+hospitals+for+ye
 3.Practicum.ipynb :- Tweeter Analysis of RCB tweets.
 
 4.Trip Advisor : Trip Advisor Data Scrapping.
+
+5.MA Assignment : Partworth Data, Conjoint Analysis and Segmentation

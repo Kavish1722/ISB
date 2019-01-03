@@ -1,0 +1,82 @@
+
+#---
+#title: "Gangtok Hotels"
+#output: html_document
+#Names:
+#Kavish Gakhar - 11910045
+#Rishab Jethwani - 11910097
+#Sanjeev Sharma - 11910079
+#---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r Gangtok Hotels URL}
+#hotel name, price, tripadvisor url, savings,
+#number_of_reviews, average rating, facilities such as wifi, parking, etc)
+if (!require(rvest)){ install.packages("rvest")}; library(rvest)
+if (!require(XML)){ install.packages("XML")}; library(XML)
+
+url = 'https://www.tripadvisor.in/Hotels-g659796-Gangtok_East_Sikkim_Sikkim-Hotels.html'    
+url_content = read_html(url)    # extract url content with read_html() func
+#write_xml(url_content,file="x.xml")
+
+nameurl = html_nodes(url_content,'.prominent')
+name = html_text(nameurl)
+link = html_attr(nameurl,'href')
+price= html_text(html_nodes(url_content,'.price-wrap'))
+price= gsub("\u20b9",":",price)
+price
+url = paste0('https://www.tripadvisor.in',link)
+df = data.frame(name, url, price)
+head(df)
+
+
+reviewscount = NULL
+rating = NULL
+amenity = NULL
+addr = NULL
+savings = NULL
+
+for (u in df$url) {
+
+  page = read_html(u)
+  reviews0 = html_text(html_nodes(page,'.reviewCount'))
+  rating0 = html_text(html_nodes(page,'.overallRating'))
+  amenity0 = paste(html_text(html_nodes(page,'.highlightedAmenity')), collapse= ", ")
+  addr0 = html_text(html_nodes(page,'.hotelActions'))
+  savings0 = html_text(html_nodes(page,'.saveMoney'))
+  if(identical(savings0,character(0)))
+     savings0 = 0
+  reviewscount = c(reviewscount, reviews0)
+  rating = c(rating,rating0)
+  amenity = c(amenity, amenity0)
+  savings = c(savings, savings0)
+  savings = gsub("\u20b9",":",savings)
+  addr = c(addr, addr0)
+  addr1 = gsub('^Save','',addr)
+  addrf = substr(addr1,1,nchar(addr1)/2)
+}
+
+df$reviewscount = reviewscount
+df$rating = rating
+df$amenity = amenity
+df$addr = addrf
+df$savings = savings
+
+#hotel name, price, tripadvisor url, savings,
+#number_of_reviews, average rating, facilities such as wifi, parking, etc)
+head(df)
+write.csv(df,file="Assignment1.csv")
+```
+
+
+
+

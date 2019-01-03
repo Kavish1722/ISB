@@ -1,0 +1,373 @@
+---
+title: "Practicum"
+author: "Kavish"
+date: "9/19/2018"
+output: html_document
+---
+
+Question to Solve : Readmission Prediction in diabetes patients ??
+
+Dataset: The dataset represents 10 years (1999-2008) of clinical care at 130 US hospitals.
+and integrated delivery networks. It includes over 50 features representing 
+patient and hospital outcomes.
+
+Source: https://archive.ics.uci.edu/ml/datasets/Diabetes+130-US+hospitals+for+years+1999-2008
+
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(GGally)
+library(ggplot2)
+library(corrplot)
+library(psych)
+library(caret)
+library(rpart)
+library(randomForest)
+library(nnet)
+library(e1071)
+library(ROCR)
+library(CORElearn)
+library(lasso2)
+```
+
+## R Markdown
+
+1.Load Data
+2.Clean Data (By Looking at data and Domain Knowledge #remove unnecessary columns)
+
+```{r cars}
+filename <- 'diabetic_data.csv'
+diabetic_data <- read.table(filename, sep = ",", header = T, na.strings = "?")
+head(diabetic_data)
+dim(diabetic_data)
+clean_diabetic_data <- select(diabetic_data,-encounter_id,-patient_nbr,-weight,-diag_1,-diag_2,-diag_3,-(25:41),-(43:47))
+dim(clean_diabetic_data)
+head(clean_diabetic_data)
+```
+
+1.Summary 
+2.Replace NA Values with Other
+
+```{r}
+summary(clean_diabetic_data)
+clean_diabetic_data$race[is.na(clean_diabetic_data$race)] <- "Other"
+any(is.na(clean_diabetic_data$race))
+clean_diabetic_data$payer_code <- as.character(clean_diabetic_data$payer_code)
+clean_diabetic_data$payer_code[is.na(clean_diabetic_data$payer_code)] <-"Other"
+clean_diabetic_data$payer_code <- as.factor(clean_diabetic_data$payer_code)
+any(is.na(clean_diabetic_data$payer_code))
+clean_diabetic_data$medical_specialty <- as.character(clean_diabetic_data$medical_specialty)
+clean_diabetic_data$medical_specialty[is.na(clean_diabetic_data$medical_specialty)] <- "Other"
+clean_diabetic_data$medical_specialty <- as.factor(clean_diabetic_data$medical_specialty)
+any(is.na(clean_diabetic_data$medical_specialty))
+```
+
+## Including Plots
+
+Some Preliminary Analysis using Box Plot for readmitted cases.
+
+```{r pressure, echo=FALSE}
+g <- ggplot(clean_diabetic_data, aes(x=race, y=time_in_hospital))
+g + geom_boxplot(aes(fill=readmitted))
+```
+
+
+
+
+```{r}
+g <- ggplot(clean_diabetic_data, aes(x=age, y=time_in_hospital))
+g + geom_boxplot(aes(fill=readmitted))
+```
+
+
+```{r}
+g <- ggplot(clean_diabetic_data,aes(x=A1Cresult, y=time_in_hospital))
+g + geom_boxplot(aes(fill=diabetesMed)) + facet_grid(. ~ readmitted)
+```
+
+
+Converting into factors with bit of Domain Knowledge... from ID Mapping Table.
+
+```{r}
+clean_diabetic_data_new <- clean_diabetic_data
+clean_diabetic_data_new$admission_type<- factor( rep("other",nrow(clean_diabetic_data_new)),ordered = F, 
+                             levels = c("Elective","Emergency","Other"))
+clean_diabetic_data_new$admission_type[clean_diabetic_data_new$admission_type_id==1]<- "Emergency"
+clean_diabetic_data_new$admission_type[clean_diabetic_data_new$admission_type_id==2]<- "Emergency"
+clean_diabetic_data_new$admission_type[clean_diabetic_data_new$admission_type_id==3]<- "Elective"
+clean_diabetic_data_new$admission_type[clean_diabetic_data_new$admission_type_id==4]<- "Other"
+clean_diabetic_data_new$admission_type[clean_diabetic_data_new$admission_type_id==5]<- "Other"
+clean_diabetic_data_new$admission_type[clean_diabetic_data_new$admission_type_id==6]<- "Other"
+clean_diabetic_data_new$admission_type[clean_diabetic_data_new$admission_type_id==7]<- "Emergency"
+clean_diabetic_data_new$admission_type[clean_diabetic_data_new$admission_type_id==6]<- "Other"
+```
+
+
+
+```{r}
+clean_diabetic_data_new$discharge_disposition_type<-factor(rep("other",nrow(clean_diabetic_data_new)),ordered = F,levels = c("Home","Hospital","Other"))
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==1 ]<-"Home"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==2]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==3]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==4]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==5]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==6 ]<-"Home"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==7 ]<-"Home"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==8]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==9]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==10]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==11]<-"Other"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==12]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==13 ]<-"Other"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==14]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==15]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==16]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==17]<-"Hospital"
+
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==18]<-"Other"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==19]<-"Other"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==20]<-"Other"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==21]<-"Expired"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==22]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==23]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==24]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==25]<-"Other"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==26]<-"Other"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==27]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==28]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==29]<-"Hospital"
+
+clean_diabetic_data_new$discharge_disposition_type[clean_diabetic_data_new$discharge_disposition_id==30]<-"Hospital"
+
+head(clean_diabetic_data_new)
+
+```
+
+
+
+```{r}
+clean_diabetic_data_new$admission_source_type<-factor(rep("other",nrow(clean_diabetic_data_new)),ordered = F,levels = c("Transfer","Referal","Other"))
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==1]<-"Referal"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==2]<-"Referal"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==3]<-"Referal"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==4]<-"Transfer"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==5]<-"Transfer"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==6]<-"Transfer"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==7]<-"Other"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==8]<-"Other"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==9]<-"Other"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==10]<-"Transfer"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==11]<-"Other"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==12]<-"Other"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==13]<-"Other"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==14]<-"Other"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==15]<-"Other"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==17]<-"Other"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==18]<-"Transfer"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==19]<-"Transfer"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==20]<-"Other"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==21]<-"Other"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==22]<-"Transfer"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==23]<-"Transfer"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==24]<-"Transfer"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==25]<-"Other"
+
+clean_diabetic_data_new$admission_source_type[clean_diabetic_data_new$admission_source_id ==26]<-"Other"
+
+clean_diabetic_data_final <- select(clean_diabetic_data_new, -payer_code,-admission_source_id,-admission_type_id,-discharge_disposition_id,-medical_specialty)
+head(clean_diabetic_data_final)
+
+```
+Training and Test Data Partitioning..
+
+```{r}
+set.seed(123)
+inTrain <- createDataPartition(y = clean_diabetic_data_final$readmitted, p = .7,list = FALSE)
+train <- clean_diabetic_data_final[ inTrain,]
+test <- clean_diabetic_data_final[-inTrain,]
+nrow(train) 
+nrow(test)
+```
+
+Logistic regression with preliminary cleaned Data
+
+```{r}
+fit_1 <- glm(readmitted ~., data=train, family=binomial)
+summary(fit_1)
+```
+
+Diagnosis Tests...
+
+
+```{r}
+logisticPseudoR2s <- function(LogModel) {
+  dev <- LogModel$deviance 
+  nullDev <- LogModel$null.deviance 
+  modelN <-  length(LogModel$fitted.values)
+  R.l <-  1 -  dev / nullDev
+  R.cs <- 1- exp ( -(nullDev - dev) / modelN)
+  R.n <- R.cs / ( 1 - ( exp (-(nullDev / modelN))))
+  cat("Pseudo R^2 for logistic regression\n")
+  cat("Hosmer and Lemeshow R^2  ", round(R.l, 3), "\n")
+  cat("Cox and Snell R^2        ", round(R.cs, 3), "\n")
+  cat("Nagelkerke R^2           ", round(R.n, 3),    "\n")
+}
+
+logisticPseudoR2s(fit_1)
+```
+
+
+Playing with Variables for better Logistic Model..
+
+```{r}
+clean_diabetic_data_final2 <- select(clean_diabetic_data_new, -payer_code,-admission_source_id,-admission_type_id,-discharge_disposition_id,-medical_specialty,-gender,-A1Cresult,-number_outpatient,-max_glu_serum,-race,-num_lab_procedures,-change)
+set.seed(123)
+inTrain <- createDataPartition(y = clean_diabetic_data_final2$readmitted, p = .7,list = FALSE)
+train1 <- clean_diabetic_data_final2[ inTrain,]
+test1 <- clean_diabetic_data_final2[-inTrain,]
+nrow(train1) 
+nrow(test1)
+fit_1 <- glm(readmitted ~., data=train1, family=binomial)
+summary(fit_1)
+anova(fit_1, test="Chisq")
+```
+
+Discriminant Analysis...
+
+```{r}
+predicted <- predict(fit_1, newdata = test1, type = "response")
+predicted <- as.numeric(predicted>0.5)
+table(predicted,test$readmitted)
+```
+
+
+Final Variables and Diagnosis....
+
+
+```{r}
+clean_diabetic_data_final3 <- select(clean_diabetic_data_new, age,time_in_hospital,num_procedures,number_emergency,number_inpatient,number_diagnoses,insulin,diabetesMed,readmitted)
+set.seed(123)
+inTrain <- createDataPartition(y = clean_diabetic_data_final3$readmitted, p = .7,list = FALSE)
+train2 <- clean_diabetic_data_final3[ inTrain,]
+test2 <- clean_diabetic_data_final3[-inTrain,]
+nrow(train1) 
+nrow(test1)
+fit_2 <- glm(readmitted ~., data=train2, family=binomial)
+summary(fit_2)
+anova(fit_2, test="Chisq")
+predicted <- predict(fit_2,test2, type = "response")
+predicted <- as.numeric(predicted>0.5)
+table(predicted,test2$readmitted)
+library(pROC)
+predicted <- predict(fit_2, newdata = test2, type = "response")
+predicted
+roccurve <- roc(test$readmitted ~ predicted)
+plot(roccurve)
+```
+
+Random Forest and Matrix Diagnosis...
+
+
+```{r}
+Rf_fit<-randomForest(formula=readmitted ~ age+time_in_hospital+
+                       +num_procedures+num_medications+number_outpatient+
+                       number_emergency+number_inpatient+number_diagnoses+
+                       insulin+diabetesMed,
+                     data=train)
+print(Rf_fit)
+
+test$pred_readmit <- predict(Rf_fit, test, type = "response")
+table(test$readmitted, test$pred_readmit)
+prop.table(table(test$readmitted, test$pred_readmit),1)
+confusionMatrix(test$pred_readmit, test$readmitted)
+```
+
+
+Rpart Tree and Matrix Diagnosis....
+
+```{r}
+rpart_tree <- rpart(formula = readmitted ~ age+time_in_hospital+
+                      num_procedures+num_medications+number_outpatient+
+                      number_emergency+number_inpatient+number_diagnoses+
+                      insulin+diabetesMed, 
+                    data=train, method = 'class')
+summary(rpart_tree)
+
+test$pred_readmit <- predict(rpart_tree, test, type="class")
+table(predict(rpart_tree, test, type="class"), test$readmitted)
+prop.table(table(test$readmitted, test$pred_readmit),1)
+confusionMatrix(test$pred_readmit, test$readmitted)
+```
+
+Neural Networks....
+
+```{r}
+nnet_model <- nnet(formula = readmitted ~ age+time_in_hospital+
+                     num_lab_procedures+num_procedures+num_medications+number_outpatient+
+                     number_emergency+number_inpatient+number_diagnoses+
+                     insulin+diabetesMed, 
+                   data=train, size = 10, maxit = 100)
+
+test$pred_readmit <- predict(nnet_model, test, type = "class")
+table(test$readmitted, test$pred_readmit)
+```
+
+
+```{r}
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

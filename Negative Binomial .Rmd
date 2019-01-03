@@ -1,0 +1,72 @@
+---
+title: "SA3_Assignment_Q1"
+author: "Kavish Gakhar"
+date: "12 December 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(psych)
+library(FSA)
+library(lattice)
+library(MASS)
+library(fitdistrplus)
+library(logspline)
+library(ggplot2)
+library(foreign)
+
+setwd("/Users/kavish/desktop/")
+whale <- read.csv("whale.csv", header = TRUE, sep=",")
+whale
+hudson <- whale[,1:4]
+casey <- whale[,5:8]
+summary(hudson)
+summary(casey)
+
+describe(hudson)
+describe(casey)
+```
+
+## 2)	Make comparative statements on the underlying probability distributions of the number of lockons of the two calves. With justification, propose appropriate regression model for number of lockons for each data set.
+
+```{r}
+# Plot the Lockons data and find the probability distribution
+
+hist (casey$Lockons.Casey)
+hist (hudson$Lockons.Hudson)
+
+casey_freq <- casey$Lockons.Casey
+hudson_freq <- hudson$Lockons.Hudson
+```
+
+## For each data set, construct the regression model you have proposed in (2) above for the number of lockons in each period as a function of time, number of nursing bouts, and time of the day. Interpret your results.
+
+
+```{r}
+
+#Regression MOdel for Casey
+
+caseyNB <- glm.nb(Lockons.Casey~Period.Casey+Bouts.Casey+Daytime.Casey,data = casey)
+
+summary(caseyNB)
+anova(caseyNB)
+par(mfrow=c(2,2))
+plot(caseyNB)
+par(mfrow=c(1,1))
+
+with(caseyNB,cbind(res.deviance=deviance, df=df.residual,p=pchisq(deviance, df.residual, lower.tail=FALSE))) # goodness of fit
+s
+#Regression MOdel for Hudson
+
+hudsonNB <- glm.nb(Lockons.Hudson~Period.Hudson+Bouts.Hudson+Daytime.Hudson,data = hudson)
+
+summary(hudsonNB)
+anova(hudsonNB)
+par(mfrow=c(2,2))
+plot(caseyNB)
+par(mfrow=c(1,1))
+
+with(hudsonNB,cbind(res.deviance=deviance, df=df.residual,p=pchisq(deviance, df.residual, lower.tail=FALSE))) # goodness of fit
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

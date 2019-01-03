@@ -10,5 +10,4 @@ patient and hospital outcomes.
 
 Source: https://archive.ics.uci.edu/ml/datasets/Diabetes+130-US+hospitals+for+years+1999-2008
 
-2.
-
+2. SA2_Regression_Marks :- Finding the impact of variables on Total Marks Using Regression- Linear and Logistic and using methods like AIC, Adjusted R^2, ROC curve and other methods of investigation of perfomance of models.
